@@ -15,18 +15,17 @@ CasperTest.begin('Ghost admin will load login page', 4, function suite(test) {
             }, '.forgotten-link');
 
             casper.echoConcise('Text' + text);
-            test.assertExists('.forgotten-link');
-            test.assertEqual(text, 'Forgotten password?');
+            test.assertExists('.forgotten-link', '.forgotten-link exists');
+            test.assertEquals(text, 'Forgot?', 'Forgotten text is correct');
         });
     });
 }, true);
 
 // Note, this test applies to a global redirect, which sends us to the standard admin.
-// Once Ember becomes the standard admin, this test should still pass.
 CasperTest.begin('Redirects login to signin', 2, function suite(test) {
     CasperTest.Routines.signout.run(test);
     casper.start(url + 'ghost/login/', function testRedirect(response) {
-        test.assertEqual(response.status, 200, 'Response status should be 200.');
+        test.assertEquals(response.status, 200, 'Response status should be 200.');
         test.assertUrlMatch(/ghost\/signin\//, 'Should be redirected to /signin/.');
     });
 }, true);
@@ -39,7 +38,7 @@ CasperTest.begin('Login limit is in place', 4, function suite(test) {
         test.assertUrlMatch(/ghost\/signin\/$/, 'Landed on the correct URL');
     });
 
-    casper.waitForOpaque('.login-box',
+    casper.waitForOpaque('.gh-signin',
         function then() {
             this.fillAndSave('#login', falseUser);
         },
@@ -53,13 +52,13 @@ CasperTest.begin('Login limit is in place', 4, function suite(test) {
 
     casper.waitForText('remaining', function onSuccess() {
         test.assert(true, 'The login limit is in place.');
-        test.assertSelectorDoesntHaveText('.notification-error', '[object Object]');
+        test.assertSelectorDoesntHaveText('.gh-alert', '[object Object]');
     }, function onTimeout() {
         test.assert(false, 'We did not trip the login limit.');
     });
 }, true);
 
-CasperTest.begin('Can login to Ghost', 5, function suite(test) {
+CasperTest.begin('Can login to Ghost', 4, function suite(test) {
     CasperTest.Routines.signout.run(test);
 
     casper.thenOpenAndWaitForPageLoad('signin', function testTitleAndUrl() {
@@ -67,7 +66,7 @@ CasperTest.begin('Can login to Ghost', 5, function suite(test) {
         test.assertUrlMatch(/ghost\/signin\/$/, 'Landed on the correct URL');
     });
 
-    casper.waitForOpaque('.login-box', function then() {
+    casper.waitForOpaque('.gh-signin', function then() {
         this.fillAndSave('#login', user);
     });
 
@@ -75,14 +74,13 @@ CasperTest.begin('Can login to Ghost', 5, function suite(test) {
 
     casper.waitForResource(/posts/, function testForDashboard() {
         test.assertUrlMatch(/ghost\/\d+\/$/, 'Landed on the correct URL');
-        test.assertExists('.global-nav', 'Global admin header is present');
-        test.assertExists('.manage', 'We\'re now on content');
+        test.assertExists('.gh-nav-main-content.active', 'Now we are on Content');
     }, function onTimeOut() {
         test.fail('Failed to signin');
     });
 }, true);
 
-CasperTest.begin('Authenticated user is redirected', 8, function suite(test) {
+CasperTest.begin('Authenticated user is redirected', 6, function suite(test) {
     CasperTest.Routines.signout.run(test);
 
     casper.thenOpenAndWaitForPageLoad('signin', function testTitleAndUrl() {
@@ -90,7 +88,8 @@ CasperTest.begin('Authenticated user is redirected', 8, function suite(test) {
         test.assertUrlMatch(/ghost\/signin\/$/, 'Landed on the correct URL');
     });
 
-    casper.waitForOpaque('.login-box', function then() {
+    casper.waitForOpaque('' +
+        '.gh-signin', function then() {
         this.fillAndSave('#login', user);
     });
 
@@ -98,22 +97,20 @@ CasperTest.begin('Authenticated user is redirected', 8, function suite(test) {
 
     casper.waitForResource(/posts/, function testForDashboard() {
         test.assertUrlMatch(/ghost\/\d+\/$/, 'Landed on the correct URL');
-        test.assertExists('.global-nav', 'Global admin header is present');
-        test.assertExists('.manage', 'We\'re now on content');
+        test.assertExists('.gh-nav-main-content.active', 'Now we are on Content');
     }, function onTimeOut() {
         test.fail('Failed to signin');
     });
 
     casper.thenOpenAndWaitForPageLoad('signin-authenticated', function testTitleAndUrl() {
         test.assertUrlMatch(/ghost\/\d+\/$/, 'Landed on the correct URL');
-        test.assertExists('.global-nav', 'Global admin header is present');
-        test.assertExists('.manage', 'We\'re now on content');
+        test.assertExists('.gh-nav-main-content.active', 'Now we are on Content');
     }, function onTimeOut() {
         test.fail('Failed to redirect');
     });
 }, true);
 
-CasperTest.begin('Ensure email field form validation', 3, function suite(test) {
+CasperTest.begin('Ensure email field form validation', 4, function suite(test) {
     CasperTest.Routines.signout.run(test);
 
     casper.thenOpenAndWaitForPageLoad('signin', function testTitleAndUrl() {
@@ -121,9 +118,9 @@ CasperTest.begin('Ensure email field form validation', 3, function suite(test) {
         test.assertUrlMatch(/ghost\/signin\/$/, 'Landed on the correct URL');
     });
 
-    casper.waitForOpaque('.js-login-box',
+    casper.waitForOpaque('.gh-signin',
         function then() {
-            this.fillAndSave('form.login-form', {
+            this.fillAndSave('form.gh-signin', {
                 identification: 'notanemail'
             });
         },
@@ -131,9 +128,17 @@ CasperTest.begin('Ensure email field form validation', 3, function suite(test) {
             test.fail('Login form didn\'t fade in.');
         });
 
-    casper.waitForSelectorTextChange('.notification-error', function onSuccess() {
-        test.assertSelectorHasText('.notification-error', 'Invalid Email');
-    }, function onTimeout() {
-        test.fail('Email validation error did not appear');
-    }, 2000);
+    casper.waitForText('Invalid email', function onSuccess() {
+        test.assert(true, 'Invalid email error was shown');
+    }, casper.failOnTimeout(test, 'Invalid email error was not shown'));
+
+    casper.then(function testMissingEmail() {
+        this.fillAndSave('form.gh-signin', {
+            identification: ''
+        });
+    });
+
+    casper.waitForText('Please enter an email', function onSuccess() {
+        test.assert(true, 'Missing email error was shown');
+    }, casper.failOnTimeout(test, 'Missing email error was not shown'));
 }, true);

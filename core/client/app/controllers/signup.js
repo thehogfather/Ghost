@@ -1,23 +1,29 @@
 import Ember from 'ember';
-import ajax from 'ghost/utils/ajax';
+import {request as ajax} from 'ic-ajax';
 import ValidationEngine from 'ghost/mixins/validation-engine';
 
-var SignupController = Ember.Controller.extend(ValidationEngine, {
-    submitting: false,
-
+export default Ember.Controller.extend(ValidationEngine, {
     // ValidationEngine settings
     validationType: 'signup',
+
+    submitting: false,
+    flowErrors: '',
+
+    ghostPaths: Ember.inject.service('ghost-paths'),
+    notifications: Ember.inject.service(),
 
     actions: {
         signup: function () {
             var self = this,
                 model = this.get('model'),
-                data = model.getProperties('name', 'email', 'password', 'token');
+                data = model.getProperties('name', 'email', 'password', 'token'),
+                notifications = this.get('notifications');
 
-            self.notifications.closePassive();
+            this.set('flowErrors', '');
+            notifications.closeNotifications();
 
-            this.toggleProperty('submitting');
-            this.validate({format: false}).then(function () {
+            this.validate().then(function () {
+                self.toggleProperty('submitting');
                 ajax({
                     url: self.get('ghostPaths.url').api('authentication', 'invitation'),
                     type: 'POST',
@@ -35,16 +41,17 @@ var SignupController = Ember.Controller.extend(ValidationEngine, {
                         identification: self.get('model.email'),
                         password: self.get('model.password')
                     });
-                }, function (resp) {
+                }).catch(function (resp) {
                     self.toggleProperty('submitting');
-                    self.notifications.showAPIError(resp);
+                    if (resp && resp.jqXHR && resp.jqXHR.responseJSON && resp.jqXHR.responseJSON.errors) {
+                        self.set('flowErrors', 'That email address is already in use.');
+                    } else {
+                        notifications.showAPIError(resp);
+                    }
                 });
-            }, function (errors) {
-                self.toggleProperty('submitting');
-                self.notifications.showErrors(errors);
+            }).catch(function () {
+                self.set('flowErrors', 'Please fill out the form to complete your sign-up');
             });
         }
     }
 });
-
-export default SignupController;

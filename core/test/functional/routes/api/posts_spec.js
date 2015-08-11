@@ -22,10 +22,7 @@ describe('Post API', function () {
         }).then(function (token) {
             accesstoken = token;
             done();
-        }).catch(function (e) {
-            console.log('Ghost Error: ', e);
-            console.log(e.stack);
-        });
+        }).catch(done);
     });
 
     after(function (done) {
@@ -121,6 +118,28 @@ describe('Post API', function () {
                     jsonResponse.posts.should.exist;
                     testUtils.API.checkResponse(jsonResponse, 'posts');
                     jsonResponse.posts.should.have.length(1);
+                    testUtils.API.checkResponse(jsonResponse.posts[0], 'post');
+                    testUtils.API.checkResponse(jsonResponse.meta.pagination, 'pagination');
+                    done();
+                });
+        });
+
+        it('can retrieve just featured posts', function (done) {
+            request.get(testUtils.API.getApiQuery('posts/?featured=true'))
+                .set('Authorization', 'Bearer ' + accesstoken)
+                .expect('Content-Type', /json/)
+                .expect('Cache-Control', testUtils.cacheRules['private'])
+                .expect(200)
+                .end(function (err, res) {
+                    if (err) {
+                        return done(err);
+                    }
+
+                    should.not.exist(res.headers['x-cache-invalidate']);
+                    var jsonResponse = res.body;
+                    jsonResponse.posts.should.exist;
+                    testUtils.API.checkResponse(jsonResponse, 'posts');
+                    jsonResponse.posts.should.have.length(4);
                     testUtils.API.checkResponse(jsonResponse.posts[0], 'post');
                     testUtils.API.checkResponse(jsonResponse.meta.pagination, 'pagination');
                     done();
@@ -518,8 +537,8 @@ describe('Post API', function () {
                                 return done(err);
                             }
 
-                            // Updating a draft should not send x-cache-invalidate headers
-                            should.not.exist(res.headers['x-cache-invalidate']);
+                            // Updating a draft should send x-cache-invalidate headers for the preview only
+                            res.headers['x-cache-invalidate'].should.eql('/p/' + draftPost.posts[0].uuid + '/');
                             done();
                         });
                 });
